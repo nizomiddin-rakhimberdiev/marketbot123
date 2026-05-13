@@ -70,8 +70,13 @@ class Database:
     def add_to_cart(self, user_id, product_id, count):
         product = self.get_product(product_id)
         if product and product[4] >= count:
-            self.cur.execute("""INSERT INTO cart (user_id, product_id, count)
-                            VALUES (?, ?, ?)""", (user_id, product_id, count))
+            cart_item = self.get_cart_item(user_id, product_id)
+            if cart_item:
+                new_count = count
+                self.cur.execute("UPDATE cart SET count = ? WHERE id = ?", (new_count, cart_item[0]))
+            else:
+                self.cur.execute("""INSERT INTO cart (user_id, product_id, count)
+                                VALUES (?, ?, ?)""", (user_id, product_id, count))
         else:
             print(f"Maxsulot {product[1]} yetarli emas")
         
@@ -80,6 +85,9 @@ class Database:
     def get_cart(self, user_id):
         return self.cur.execute("SELECT * FROM cart WHERE user_id=?", (user_id,)).fetchall()
     
+    def get_cart_item(self, user_id, product_id):
+        return self.cur.execute("SELECT * FROM cart WHERE user_id=? AND product_id=?", (user_id, product_id)).fetchone()
+
     def clear_cart(self, user_id):
         self.cur.execute("DELETE FROM cart WHERE user_id=?", (user_id,))
         self.con.commit()
@@ -98,3 +106,7 @@ class Database:
         self.cur.execute("""INSERT INTO orders (user_id, products, count, total_price, ordered_at)
                          VALUES (?, ?, ?, ?, datetime('now'))""", (user_id, products, count, total_price))
         self.con.commit()
+
+
+# db = Database()
+# db.clear_cart(726130790)

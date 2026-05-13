@@ -1,10 +1,10 @@
 from aiogram import Bot, Dispatcher, types, F
 import asyncio
 import os
-from marketbot.database import Database
+from database import Database
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from marketbot.keyboards import students_btns, admin_btns, products_btns, users_btn, plus_minus_btns
+from keyboards import students_btns, admin_btns, products_btns, users_btn, plus_minus_btns
 
 class RegisterState(StatesGroup):
     phone = State()
@@ -40,7 +40,12 @@ async def product_handler(call: types.CallbackQuery):
     id = int(call.data.split('_')[1])
     product = db.get_product(id)
     if product:
-        await call.message.answer_photo(photo=product[3], caption=f"{product[1]}\nNarxi: {product[2]}\nSoni: {product[4]}", reply_markup=plus_minus_btns(product[0]))
+        cart_item = db.get_cart_item(call.from_user.id, id)
+        if cart_item:
+            count = cart_item[3]
+            await call.message.answer_photo(photo=product[3], caption=f"{product[1]}\nNarxi: {product[2]}\nSoni: {product[4]}", reply_markup=plus_minus_btns(product[0], count))
+        else:
+            await call.message.answer_photo(photo=product[3], caption=f"{product[1]}\nNarxi: {product[2]}\nSoni: {product[4]}", reply_markup=plus_minus_btns(product[0]))
     else:
         print("Bunaqa mahsulot yo'q")
 
