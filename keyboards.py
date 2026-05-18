@@ -56,3 +56,24 @@ def plus_minus_btns(product_id, count=1):
     kb.button(text="Savatchaga qo'shish", callback_data=f"add_to_cart_{product_id}")
     kb.adjust(3)
     return kb.as_markup()
+
+def create_order_btn():
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="Buyurtma berish", callback_data="create_order")
+            ]
+        ]
+    )
+    return kb
+
+def send_location_btn():
+    kb = ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="Manzilni yuborish", request_location=True)
+            ]
+        ],
+        resize_keyboard=True
+    )
+    return kb

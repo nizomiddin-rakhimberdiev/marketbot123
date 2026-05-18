@@ -4,7 +4,11 @@ import os
 from database import Database
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from keyboards import students_btns, admin_btns, products_btns, users_btn, plus_minus_btns
+from keyboards import students_btns, admin_btns, send_location_btn, products_btns, users_btn, plus_minus_btns, create_order_btn
+from geopy import geocoders
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+geolocator = geocoders.Nominatim(user_agent="myGeocoder12345")
 
 class RegisterState(StatesGroup):
     phone = State()
@@ -14,6 +18,10 @@ class AddProductState(StatesGroup):
     price = State()
     image = State()
     count = State()
+
+class OrderState(StatesGroup):
+    location = State()
+    payment = State()
 
 db = Database()
 bot = Bot(token="8616651254:AAFzw_H-TySYYSN8IUzSTPYXSD_bXfZJWEU")
@@ -80,7 +88,7 @@ async def cart(message: types.Message):
             text += f"{product[1]} - {item[3]} ta - Narxi: {product[2] * item[3]}\n"
             total_price += product[2] * item[3]
         text += f"\nJami narx: {total_price}"
-        await message.answer(text)
+        await message.answer(text, reply_markup=create_order_btn())
     else:
         await message.answer("Savatchangiz bo'sh!")
 
@@ -162,7 +170,67 @@ async def process_phone(message: types.Message, state: FSMContext):
     await message.answer("Ro'yxatdan muvaffaqiyatli o'tdingiz!")
     await state.clear()
 
+@dp.callback_query(F.data=='create_order')
+async def create_order_handler(call: types.CallbackQuery, state: FSMContext):
+    await call.message.answer("Buyurtmangizni tasdiqlash uchun manzilingizni yuboring:", reply_markup=send_location_btn())
+    await state.set_state(OrderState.location)
 
+@dp.message(OrderState.location, F.content_type == types.ContentType.LOCATION)
+async def process_location(message: types.Message, state: FSMContext):
+    latitude = message.location.latitude
+    longitude = message.location.longitude
+    location = geolocator.reverse(f"{latitude}, {longitude}")
+    await state.update_data(location=location.address, latitude=latitude, longitude=longitude)
+    await message.answer("To'lov turini tanlang:", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Naqd", callback_data="payment_cash"),
+            InlineKeyboardButton(text="Click", callback_data="payment_click"),
+            InlineKeyboardButton(text="Payme", callback_data="payment_payme"),
+        ]
+    ]))
+    await state.set_state(OrderState.payment)
+
+@dp.callback_query(F.data.startswith('payment_'))
+async def process_payment(call: types.CallbackQuery, state: FSMContext):
+    payment = call.data.split('_')[1]
+    if payment == "cash":
+        payment = "Naqd"
+        data = await state.get_data()
+        location = data['location']
+        latitude = data['latitude']
+        longitude = data['longitude']
+        user_id = call.from_user.id
+        cart_items = db.get_cart(user_id)
+        if cart_items:
+            products = []
+            total_price = 0
+            for item in cart_items:
+                product = db.get_product(item[2])
+                products.append((product[1], item[3], product[2] * item[3]))
+                total_price += product[2] * item[3]
+            status = db.create_order(user_id, str(products), payment, total_price, location, latitude, longitude)
+            db.clear_cart(user_id)
+            if status == True:
+                await call.message.answer("Buyurtmangiz qabul qilindi! Tez orada siz bilan bog'lanamiz.")
+            else:
+                await call.message.answer("Savatchangizdagi ba'zi maxsulotlar yo'q karoche, ertaroq sotvolish kerak edi!")
+        else:
+            await call.message.answer("Savatchangiz bo'sh!")
+    elif payment == "click" or payment == "payme":
+        await call.message.answer("Hozirda bu to'lov usuli qo'llab-quvvatlanmaydi. Iltimos, boshqa to'lov turini tanlang.")
+
+
+@dp.message(F.text == 'Buyurtmalarim')
+async def orders(message: types.Message):
+    user_id = message.from_user.id
+    orders = db.get_orders(user_id)
+    if orders:
+        text = "Sizning buyurtmalaringiz:\n\n"
+        for order in orders:
+            text += f"Buyurtma ID: {order[0]}\nMahsulotlar: {order[2]}\nTo'lov turi: {order[3]}\nJami narx: {order[4]}\nManzil: {order[5]}\nSana: {order[8]}\n\n"
+        await message.answer(text)
+    else:
+        await message.answer("Sizda hech qanday buyurtma yo'q!")
 
 @dp.message(F.text=='/students')
 async def students_handler(message: types.Message):

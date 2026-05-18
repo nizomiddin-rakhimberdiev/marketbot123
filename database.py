@@ -1,4 +1,5 @@
 import sqlite3
+import datetime 
 
 class Database:
     def __init__(self):
@@ -35,8 +36,11 @@ class Database:
                             id INTEGER PRIMARY KEY AUTOINCREMENT,
                             user_id VARCHAR(20),
                             products TEXT,
-                            count INTEGER,
+                            payment VARCHAR(10),
                             total_price INTEGER,
+                            location VARCHAR(250),
+                            latitude REAL,
+                            longitude REAL,
                             ordered_at DATETIME
                             );
         """)
@@ -92,7 +96,7 @@ class Database:
         self.cur.execute("DELETE FROM cart WHERE user_id=?", (user_id,))
         self.con.commit()
 
-    def create_order(self, user_id, products, count, total_price):
+    def create_order(self, user_id, products, payment, total_price, location, latitude, longitude):
         cart_items = self.get_cart(user_id)
         for item in cart_items:
             product_id = item[2]
@@ -102,11 +106,20 @@ class Database:
                 self.cur.execute("UPDATE products SET count = count - ? WHERE id = ?", (count, product_id))
             else:
                 print(f"Maxsulot {product[1]} yetarli emas")
-
-        self.cur.execute("""INSERT INTO orders (user_id, products, count, total_price, ordered_at)
-                         VALUES (?, ?, ?, ?, datetime('now'))""", (user_id, products, count, total_price))
+                return False
+        ordered_at = datetime.datetime.now()
+        self.cur.execute("""INSERT INTO orders (user_id, products, payment, total_price, ordered_at, location, latitude, longitude)
+                         VALUES (?, ?, ?,  ?, ?, ?, ?, ?)""", (user_id, products, payment, total_price, ordered_at, location, latitude, longitude))
         self.con.commit()
+        return True
+    
+    def get_orders(self, user_id):
+        return self.cur.execute("SELECT * FROM orders WHERE user_id=?", (user_id,)).fetchall()
+
+    def delete_table(self):
+        self.cur.execute("DROP TABLE orders")
 
 
-# db = Database()
+db = Database()
 # db.clear_cart(726130790)
+# db.delete_table()
